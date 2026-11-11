@@ -30,6 +30,42 @@ function _createStream(filepath) {
     return file.replace(null, false, Gio.FileCreateFlags.PRIVATE, null);
 }
 
+function _getMonitors() {
+    const display = global.display;
+    const nMonitors = display.get_n_monitors();
+    const monitors = [];
+    for (let i = 0; i < nMonitors; i++) {
+        const rect = display.get_monitor_geometry(i);
+        monitors.push({
+            index: i,
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            right: rect.x + rect.width,
+            bottom: rect.y + rect.height,
+        });
+    }
+    return monitors;
+}
+
+function _monitorIntersectsArea(monitor, x, y, right, bottom) {
+    return x < monitor.right && right > monitor.x &&
+        y < monitor.bottom && bottom > monitor.y;
+}
+
+function _monitorContainsArea(monitor, x, y, right, bottom) {
+    return x >= monitor.x && y >= monitor.y &&
+        right <= monitor.right && bottom <= monitor.bottom;
+}
+
+function _areaError(x, y, width, height, right, bottom, intersecting) {
+    const indexes = intersecting.length > 0
+        ? intersecting.map(monitor => monitor.index).join(', ')
+        : 'none';
+    return `ScreenshotFailed: Requested area (x=${x}, y=${y}, width=${width}, height=${height}, right=${right}, bottom=${bottom}) is not fully contained within a single monitor. It intersects monitor(s): ${indexes}. Call get_monitors to query valid monitor bounds before retrying.`;
+}
+
 export function screenshotFull(includeCursor, invocation) {
     _ensureDir();
     const filepath = _nextFilename();
@@ -73,6 +109,28 @@ export function screenshotWindow(includeCursor, includeFrame, invocation, onComp
 }
 
 export function screenshotArea(x, y, width, height, includeCursor, invocation) {
+    const right = x + width;
+    const bottom = y + height;
+
+    if (width < 1 || height < 1) {
+        invocation.return_error_literal(
+            Gio.DBusError, Gio.DBusError.FAILED,
+            _areaError(x, y, width, height, right, bottom, []));
+        return;
+    }
+
+    const monitors = _getMonitors();
+    const intersecting = monitors.filter(monitor =>
+        _monitorIntersectsArea(monitor, x, y, right, bottom));
+    const containing = monitors.filter(monitor =>
+        _monitorContainsArea(monitor, x, y, right, bottom));
+    if (containing.length !== 1) {
+        invocation.return_error_literal(
+            Gio.DBusError, Gio.DBusError.FAILED,
+            _areaError(x, y, width, height, right, bottom, intersecting));
+        return;
+    }
+
     _ensureDir();
     const filepath = _nextFilename();
     const stream = _createStream(filepath);
