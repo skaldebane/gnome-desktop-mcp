@@ -174,6 +174,14 @@ export class DbusService {
         this._activityLog = [];
         this._onActivity = null;
         this._onEnabledChanged = null;
+        this._screenshotTimerId = null;
+    }
+
+    destroy() {
+        if (this._screenshotTimerId) {
+            GLib.source_remove(this._screenshotTimerId);
+            this._screenshotTimerId = null;
+        }
     }
 
     get enabled() { return this._enabled; }
@@ -269,7 +277,10 @@ export class DbusService {
         const wasMinimized = win.minimized;
         if (wasMinimized) win.unminimize();
         win.activate(global.get_current_time());
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+        if (this._screenshotTimerId)
+            GLib.source_remove(this._screenshotTimerId);
+        this._screenshotTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+            this._screenshotTimerId = null;
             const onComplete = wasMinimized ? () => win.minimize() : null;
             Screenshot.screenshotWindow(includeCursor, includeFrame, invocation, onComplete);
             return GLib.SOURCE_REMOVE;

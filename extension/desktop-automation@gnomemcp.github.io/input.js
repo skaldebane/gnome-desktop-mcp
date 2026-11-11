@@ -134,6 +134,7 @@ export function mouseScroll(x, y, dx, dy) {
     const now = GLib.get_monotonic_time();
     vmouse.notify_absolute_motion(now, x, y);
     vmouse.notify_scroll_continuous(now + 10000, dx, dy,
+        Clutter.ScrollSource.WHEEL,
         Clutter.ScrollFinishFlags.NONE);
     return true;
 }

@@ -98,10 +98,16 @@ export function pickColor(x, y, invocation) {
     screenshot.pick_color(x, y, (source, result) => {
         try {
             const color = screenshot.pick_color_finish(result);
+            // Cogl.Color exposes float channels (0.0-1.0) since Mutter 47 and
+            // 0-255 ints before; NaN means the field could not be read.
+            const norm = (v) => {
+                if (typeof v !== 'number' || isNaN(v)) return 0.0;
+                return v > 1.0 ? v / 255.0 : v;
+            };
             invocation.return_value(GLib.Variant.new('(ddd)', [
-                color.red / 255.0,
-                color.green / 255.0,
-                color.blue / 255.0,
+                norm(color.red),
+                norm(color.green),
+                norm(color.blue),
             ]));
         } catch (e) {
             invocation.return_error_literal(
